@@ -1,4 +1,5 @@
 .virtual_documents/
 .ipynb_checkpoints/
+.anaconda_projects/
 .notebooks/ipynb_checkpoints
 .notebooks/anaconda_projects
