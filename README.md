@@ -1,156 +1,229 @@
-# CarScope AI — India's Used Car Fraud Detector
+# CarScope AI: India Used Car Fraud Detector
 
-An unsupervised machine learning system that assigns a **0–100 fraud risk score** to any used car listing, explains *why* it's suspicious, and classifies the anomaly type — with a live Streamlit demo.
+CarScope AI is an end-to-end machine learning pipeline and interactive web application designed to determine fair market valuations and detect pricing and structural anomalies within the Indian used car market.
+
+It utilizes a robust **Ensemble Anomaly Detection Framework** combining **Supervised Target Residuals (XGBoost)** and **Unsupervised Distance/Density Models (Isolation Forest & Local Outlier Factor)** to flag suspicious vehicle listings in real time.
 
 ---
 
-## The Problem
+## Features
 
-India's used car market (₹1.5 lakh crore, 2024) has no standardised pricing authority and no mandatory inspection. Listings on CarDekho, OLX Autos, and Cars24 are self-reported by sellers. This enables:
+### 🔹 End-to-End ML Pipeline
 
-- Underpriced scam listings / salvaged vehicles
-- Overpriced exploitation of uninformed buyers
-- Odometer tampering (low KM/year on old cars)
-- Commercial vehicle mislabelling (unusually high KM/year)
-- Age-price misrepresentation
+Fully automated data ingestion, temporal feature engineering, model training, anomaly detection, and evaluation scoring.
 
-**There is no labeled fraud dataset for Indian used cars.** This makes it a classic unsupervised anomaly detection problem.
+### 🔹 Multi-Algorithm Consensus Detection
+
+Flags suspicious listings only when multiple mathematical perspectives (Global Isolation, Local Density, and Price Deviation) agree.
+
+### 🔹 Interactive 3D PCA Visualization
+
+Visualizes how different anomaly detection algorithms separate normal vehicle listings from anomalous outliers in a reduced 3D feature space.
+
+### 🔹 Real-Time Listing Evaluation
+
+A modern dark-themed Streamlit application allowing users to input vehicle specifications and instantly receive an **Anomaly Index Rating** with actionable insights.
 
 ---
 
 ## Project Structure
 
-```
-carscope_ai/
-├── src/
-│   ├── feature_engineering.py  # Raw CSV → scaled features + saved preprocessor
-│   ├── train_models.py         # Trains IF, LOF, DBSCAN, XGBoost → results.csv
-│   └── inference.py            # Stateless scoring engine for Streamlit
+```text
+ CarScope-AI
+├── run_pipeline.py              # Master execution script
+├── requirements.txt            # Project dependencies
+├── README.md                   # Project documentation
+│
 ├── app/
-│   └── streamlit_app.py        # Three-page Streamlit app
-├── data/                       # Auto-created: CSVs, results, PCA data
-├── models/                     # Auto-created: saved .pkl files
-├── run_pipeline.py             # One-shot training pipeline
-└── requirements.txt
+│   └── streamlit_app.py        # Interactive Streamlit web application
+│
+├── src/
+│   ├── feature_engineering.py  # Data preprocessing and feature creation
+│   ├── train_models.py         # XGBoost, Isolation Forest and LOF training
+│   ├── pca_visualization.py    # PCA computation and visualization generation
+│   └── inference.py            # Real-time anomaly inference logic
+│
+├── data/                       # Raw datasets and processed outputs
+├── models/                     # Serialized trained models (.pkl files)
+├── plots/                      # Generated visualizations and figures
+├── notebooks/                  # EDA and experimentation notebooks
+└── hyperparameters/            # Tuned model configurations
 ```
 
 ---
 
-## Quickstart
+## Installation & Setup
 
-### 1. Install dependencies
+### 1️. Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/CarScope-AI.git
+cd CarScope-AI
+```
+
+### 2. Create a Virtual Environment (Recommended)
+
+**Linux / macOS**
+
+```bash
+python -m venv venv
+source venv/bin/activate
+```
+
+**Windows**
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+### 3. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Place your dataset
-```
-data/Car Sell Dataset.csv
+---
+
+## Usage Guide
+
+### Step 1: Prepare the Dataset
+
+Place your dataset inside the `data/` directory and ensure it is named exactly:
+
+```text
+Car Sell Dataset.csv
 ```
 
-### 3. Run the full training pipeline
+---
+
+### Step 2: Run the Training Pipeline
+
+Execute the master pipeline to:
+
+* Perform feature engineering
+* Train all anomaly detection models
+* Generate PCA coordinates
+* Save trained models
+* Run validation diagnostics
+
 ```bash
-python run_pipeline.py --data "data/Car Sell Dataset.csv"
+python run_pipeline.py
 ```
 
-This runs feature engineering → price model → anomaly detection → saves everything.
+> **Note:** This automatically populates the `models/`, `data/`, and `plots/` directories with production-ready artifacts.
 
-### 4. Launch the Streamlit app
+---
+
+### Step 3: Launch the Web Application
+
+After the pipeline completes successfully:
+
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
----
-
-## System Architecture
-
-```
-Raw Dataset
-    │
-    ▼
-Feature Engineering
-  Car_Age, KM_Per_Year
-  TargetEncoder (Brand/Model/State)
-  OneHotEncoder (Fuel/CarType)
-  StandardScaler
-    │
-    ▼
-XGBoost Price Regressor   →   Fair Market Value
-  price_gap = listed − predicted
-  price_deviation_%
-    │  (fed back as features)
-    ▼
-Ensemble Anomaly Detection
-  Isolation Forest  (contamination=0.03, trees=100)   — 45% weight
-  Price Deviation Signal                              — 30% weight
-  Local Outlier Factor (n_neighbors=5, cont=0.03)    — 15% weight
-  DBSCAN (eps=1.5, min_samples=3)                    — 10% weight
-    │
-    ▼
-Fraud Score 0–100  +  Anomaly Type  +  Per-Listing Insights
-```
+Open the provided local URL in your browser to access the application.
 
 ---
 
-## Model Performance
+## Algorithmic Methodology
 
-| Metric | Value |
-|--------|-------|
-| R² (XGBoost price model) | ~0.27* |
-| MAE | ₹~X lakh |
-| Ensemble anomaly rate | ~3% (tuned contamination) |
+### XGBoost Regressor
 
-*R² of 0.27 is intentional — the goal is price residuals for anomaly detection, not price prediction. The model variant column is coarse trim tier, not full variant name, which limits ceiling. The residuals are still strongly predictive of fraud patterns.
+Acts as the fair-market valuation engine.
 
----
+Features are processed through:
 
-## Fraud Score Formula
+* Target Encoding for high-cardinality variables (Brand, Model, Variant, State)
+* Standard Scaling for numerical features
 
-```
-fraud_score = 0.45 × IF_contribution
-            + 0.30 × price_deviation_signal
-            + 0.15 × LOF_contribution
-            + 0.10 × DBSCAN_contribution
-
-→ clipped and scaled to [0, 100]
-```
-
-Consensus voting (≥2 of 3 models flag) determines binary `is_anomaly`.
+Listings with significant deviations between actual and predicted prices are flagged as suspicious.
 
 ---
 
-## Anomaly Types
+### Isolation Forest
 
-| Type | Rule |
-|------|------|
-| Underpriced | Listed < 65% of predicted fair value |
-| Overpriced | Listed > 135% of predicted fair value |
-| Unusual Mileage (High) | KM/year > 97th percentile |
-| Unusual Mileage (Low for Age) | Car age > 8 yrs AND KM/year < 5th percentile |
-| Suspicious Age-Price Ratio | Old car at 2× brand median or new car at <40% brand median |
+A global anomaly detection model that identifies structurally unusual vehicles based on feature isolation.
 
----
+Examples include:
 
-## Streamlit App Pages
-
-| Page | What It Does |
-|------|-------------|
-| 🔍 Analyse a Listing | Real-time fraud score for any user-entered listing |
-| 📊 Market Overview | Dataset-level anomaly explorer with 3D PCA, scatter maps, brand heatmap |
-| 📖 How It Works | Full methodology explainer with architecture diagram |
+* Unrealistic mileage-to-age ratios
+* Rare combinations of vehicle attributes
+* Abnormal market positioning
 
 ---
 
-## Algorithm Selection Rationale
+### Local Outlier Factor (LOF)
 
-| Algorithm | Question | Best At |
-|-----------|----------|---------|
-| Isolation Forest | "Is this globally hard to isolate?" | Extreme outliers (₹95K Fortuner) |
-| Local Outlier Factor | "Unusual vs its neighbours?" | Subtle fraud within a brand cluster |
-| DBSCAN | "Does it belong to any cluster?" | Cars with no market peers |
+A density-based anomaly detector that compares a listing against its nearest neighbors.
+
+This helps identify vehicles that appear unusual relative to similar:
+
+* Brands
+* Variants
+* Fuel types
+* Geographic regions
 
 ---
 
-## Advanced Note (Systems Thinking)
+## Ensemble Anomaly Framework
 
-The price model is trained on data that includes fraudulent listings — meaning underpriced anomalies slightly lower the predicted fair value. The fix: run anomaly detection first, remove flagged listings, retrain on "clean" data. This two-pass approach is mentioned in the How It Works page and is a natural next step.
+CarScope AI combines three complementary perspectives:
+
+| Component                 | Purpose                             |
+| ------------------------- | ----------------------------------- |
+| XGBoost Residual Analysis | Detects abnormal pricing            |
+| Isolation Forest          | Detects global structural anomalies |
+| Local Outlier Factor      | Detects local density anomalies     |
+
+A listing receives a higher anomaly score when multiple detectors agree, significantly reducing false positives and improving fraud detection reliability.
+
+---
+
+## Outputs Generated
+
+After running the pipeline, the following artifacts are generated:
+
+* Trained XGBoost price prediction model
+* Trained Isolation Forest model
+* Trained Local Outlier Factor model
+* PCA-transformed feature space
+* Anomaly labels and scores
+* Interactive Streamlit dashboard
+* Diagnostic visualizations
+
+---
+
+## Tech Stack
+
+* Python
+* Pandas
+* NumPy
+* Scikit-learn
+* XGBoost
+* Plotly
+* Matplotlib
+* Streamlit
+* Joblib
+
+---
+
+## Use Cases
+
+* Used Car Marketplace Monitoring
+* Vehicle Price Fraud Detection
+* Suspicious Listing Investigation
+* Dealer Quality Auditing
+* Market Pricing Intelligence
+* Automotive Risk Analytics
+
+---
+
+## 👨‍💻 Author
+
+**Devashish Rawat**
+
+Computer Science Student | Machine Learning Enthusiast | Data Science Practitioner
+
+If you found this project useful, consider giving it a ⭐ on GitHub.
