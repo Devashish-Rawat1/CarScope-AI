@@ -103,7 +103,7 @@ with st.sidebar:
     page = st.radio("Navigation Mapping", pages, label_visibility="collapsed")
     
     st.markdown("---")
-    st.markdown("<small style='color:#475569'>Ensemble Model Framework<br>Backend: XGBoost, Isolation Forest, LOF</small>", unsafe_allow_html=True)
+    st.markdown("<small style='color:#475569'>Ensemble Model Framework<br>Backend: XGBoost, Isolation Forest, LOF, DBSCAN</small>", unsafe_allow_html=True)
 
 # ── Page 1: Project Journey (Landing Page) ────────────────────────────────────
 if page == "Project Journey":
@@ -147,17 +147,24 @@ if page == "Project Journey":
         st.dataframe(eng_df.head(5), use_container_width=True)
 
     st.markdown('<div class="sec-hdr">3. Anomaly Detection Architecture</div>', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    with c1: st.markdown('<div class="metric-tile"><div class="metric-val" style="font-size:20px;color:#3b82f6">Targeted XGBoost</div><div class="metric-lbl">Baseline Price Estimation</div></div>', unsafe_allow_html=True)
-    with c2: st.markdown('<div class="metric-tile"><div class="metric-val" style="font-size:20px;color:#10b981">Isolation Forest</div><div class="metric-lbl">Global Cluster Deviance</div></div>', unsafe_allow_html=True)
-    with c3: st.markdown('<div class="metric-tile"><div class="metric-val" style="font-size:20px;color:#f59e0b">Local Outlier Factor</div><div class="metric-lbl">Local Density Deviance</div></div>', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+    with c1: st.markdown('<div class="metric-tile"><div class="metric-val" style="font-size:18px;color:#3b82f6">Targeted XGBoost</div><div class="metric-lbl">Baseline Price Estimation</div></div>', unsafe_allow_html=True)
+    with c2: st.markdown('<div class="metric-tile"><div class="metric-val" style="font-size:18px;color:#10b981">Isolation Forest</div><div class="metric-lbl">Global Cluster Deviance</div></div>', unsafe_allow_html=True)
+    with c3: st.markdown('<div class="metric-tile"><div class="metric-val" style="font-size:18px;color:#f59e0b">Local Outlier Factor</div><div class="metric-lbl">Local Density Deviance</div></div>', unsafe_allow_html=True)
+    with c4: st.markdown('<div class="metric-tile"><div class="metric-val" style="font-size:18px;color:#a78bfa">DBSCAN</div><div class="metric-lbl">Cluster Membership Deviance</div></div>', unsafe_allow_html=True)
 
     st.markdown('<div class="sec-hdr">4. Anomaly Resolution & Analysis</div>', unsafe_allow_html=True)
     st.markdown("""
     <div class="step-box">
         <div class="step-title">Consensus Voting Logic</div>
         <div class="step-text">
-        The pipeline does not rely on a single algorithm. Anomalies are classified using a composite scoring mechanism combining Unsupervised Global distance (Isolation Forest), Unsupervised Local density (LOF), and Supervised Target Residuals (XGBoost Price Delta). Records flagged by multiple independent matrices are marked as "Consensus Fraud Deviance".
+        The pipeline does not rely on a single algorithm. Three independent unsupervised
+        detectors each cast a vote on every listing's feature profile -- Isolation Forest
+        (global distance), Local Outlier Factor (local density), and DBSCAN (cluster
+        membership, evaluated for new listings via a nearest-core-point lookup). A listing
+        flagged by at least 2 of these 3 detectors is marked "Consensus Fraud Deviance".
+        The XGBoost price model contributes a separate, weighted signal based on how far
+        the listed price deviates from its predicted fair value.
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -165,7 +172,7 @@ if page == "Project Journey":
 # ── Page 2: Model Comparison & PCA ────────────────────────────────────────────
 elif page == "Model Comparison & PCA":
     st.markdown("## Multi-Model Dimensionality Analysis")
-    st.markdown("<p style='color:#94a3b8;font-size:14px'>Interactive 3D Principal Component Analysis (PCA) showcasing how different algorithms partition normal parameters versus structural anomalies.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color:#94a3b8;font-size:14px'>Interactive 3D PCA showing how Isolation Forest, LOF, and DBSCAN each partition normal listings from structural anomalies, plus the combined consensus vote.</p>", unsafe_allow_html=True)
     
     pca_df = load_pca_components()
     
@@ -176,36 +183,45 @@ elif page == "Model Comparison & PCA":
         total_pts = len(pca_df)
         iso_count = pca_df["iso_anomaly"].sum()
         lof_count = pca_df["lof_anomaly"].sum()
+        dbscan_count = pca_df["dbscan_anomaly"].sum() if "dbscan_anomaly" in pca_df.columns else 0
         cons_count = pca_df["consensus_anomaly"].sum()
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1: st.markdown(f'<div class="metric-tile"><div class="metric-val" style="color:#10b981">{total_pts - iso_count} / {iso_count}</div><div class="metric-lbl">Iso Forest (Normal / Anomaly)</div></div>', unsafe_allow_html=True)
         with col2: st.markdown(f'<div class="metric-tile"><div class="metric-val" style="color:#f59e0b">{total_pts - lof_count} / {lof_count}</div><div class="metric-lbl">LOF (Normal / Anomaly)</div></div>', unsafe_allow_html=True)
-        with col3: st.markdown(f'<div class="metric-tile"><div class="metric-val" style="color:#ef4444">{total_pts - cons_count} / {cons_count}</div><div class="metric-lbl">Consensus (Normal / Anomaly)</div></div>', unsafe_allow_html=True)
+        with col3: st.markdown(f'<div class="metric-tile"><div class="metric-val" style="color:#a78bfa">{total_pts - dbscan_count} / {dbscan_count}</div><div class="metric-lbl">DBSCAN (Normal / Anomaly)</div></div>', unsafe_allow_html=True)
+        with col4: st.markdown(f'<div class="metric-tile"><div class="metric-val" style="color:#ef4444">{total_pts - cons_count} / {cons_count}</div><div class="metric-lbl">Consensus &ge;2/3 (Normal / Anomaly)</div></div>', unsafe_allow_html=True)
 
-        tab1, tab2, tab3 = st.tabs(["Isolation Forest Map", "Local Outlier Factor Map", "Consensus Voting Map"])
+        tabs = st.tabs(["Isolation Forest Map", "Local Outlier Factor Map", "DBSCAN Map", "Consensus Voting Map"])
         
         def render_3d_scatter(df, color_col, title, colorscale):
             fig = px.scatter_3d(df, x="PC1", y="PC2", z="PC3", color=color_col, opacity=0.7, color_continuous_scale=colorscale, title=title)
             fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", scene={"bgcolor": "#0a0a0e", "xaxis": {"gridcolor": "#1e1e2f"}, "yaxis": {"gridcolor": "#1e1e2f"}, "zaxis": {"gridcolor": "#1e1e2f"}}, height=600)
             return fig
 
-        with tab1:
+        with tabs[0]:
             st.plotly_chart(render_3d_scatter(samp_pca, "iso_anomaly", "Isolation Forest: Global Outliers", ["#1f77b4", "#10b981"]), use_container_width=True)
-        with tab2:
+        with tabs[1]:
             st.plotly_chart(render_3d_scatter(samp_pca, "lof_anomaly", "Local Outlier Factor: Density Outliers", ["#1f77b4", "#f59e0b"]), use_container_width=True)
-        with tab3:
-            st.plotly_chart(render_3d_scatter(samp_pca, "consensus_anomaly", "Consensus Matrix: High Confidence Fraud", ["#1f77b4", "#ef4444"]), use_container_width=True)
+        with tabs[2]:
+            st.plotly_chart(render_3d_scatter(samp_pca, "dbscan_anomaly", "DBSCAN: Cluster Membership Outliers", ["#1f77b4", "#a78bfa"]), use_container_width=True)
+        with tabs[3]:
+            st.plotly_chart(render_3d_scatter(samp_pca, "consensus_anomaly", "Consensus Matrix: \u22652 of 3 Votes", ["#1f77b4", "#ef4444"]), use_container_width=True)
 
-        st.markdown('<div class="sec-hdr">Algorithmic Overlap Matrix</div>', unsafe_allow_html=True)
-        overlap_data = pd.DataFrame({
-            "Metric": ["Total Evaluated Records", "Flagged exclusively by Iso Forest", "Flagged exclusively by LOF", "Flagged by Both (Strict Consensus)"],
-            "Count": [total_pts, 
-                      len(pca_df[(pca_df["iso_anomaly"]==1) & (pca_df["lof_anomaly"]==0)]),
-                      len(pca_df[(pca_df["iso_anomaly"]==0) & (pca_df["lof_anomaly"]==1)]),
-                      len(pca_df[(pca_df["iso_anomaly"]==1) & (pca_df["lof_anomaly"]==1)])]
-        })
-        st.dataframe(overlap_data, use_container_width=True, hide_index=True)
+        st.markdown('<div class="sec-hdr">Vote Count Distribution</div>', unsafe_allow_html=True)
+        if "vote_count" in pca_df.columns:
+            vote_dist = pca_df["vote_count"].value_counts().sort_index().reset_index()
+            vote_dist.columns = ["Models That Flagged This Listing (out of 3)", "Listing Count"]
+            st.dataframe(vote_dist, use_container_width=True, hide_index=True)
+        else:
+            overlap_data = pd.DataFrame({
+                "Metric": ["Total Evaluated Records", "Flagged exclusively by Iso Forest", "Flagged exclusively by LOF", "Flagged by Both (Strict Consensus)"],
+                "Count": [total_pts, 
+                          len(pca_df[(pca_df["iso_anomaly"]==1) & (pca_df["lof_anomaly"]==0)]),
+                          len(pca_df[(pca_df["iso_anomaly"]==0) & (pca_df["lof_anomaly"]==1)]),
+                          len(pca_df[(pca_df["iso_anomaly"]==1) & (pca_df["lof_anomaly"]==1)])]
+            })
+            st.dataframe(overlap_data, use_container_width=True, hide_index=True)
         
     else:
         st.warning("PCA component matrix missing. Please execute the core pipeline to generate visualization artifacts.")
@@ -268,8 +284,16 @@ elif page == "Analyze a Listing":
 elif page == "Market Overview":
     st.markdown("## Aggregate Market Health")
     pca_df = load_pca_components()
-    
+
+    if pca_df is not None and "consensus_anomaly" in pca_df.columns:
+        total_pts = len(pca_df)
+        flagged = int(pca_df["consensus_anomaly"].sum())
+        rate = (flagged / total_pts * 100) if total_pts else 0.0
+    else:
+        # Fallback values if the pipeline hasn't been run yet in this environment.
+        total_pts, flagged, rate = 140904, 4227, 3.00
+
     k1, k2, k3 = st.columns(3)
-    with k1: st.markdown('<div class="metric-tile"><div class="metric-val" style="color:#3b82f6">140,904</div><div class="metric-lbl">Total Monitored Units</div></div>', unsafe_allow_html=True)
-    with k2: st.markdown('<div class="metric-tile"><div class="metric-val" style="color:#fb923c">4,227</div><div class="metric-lbl">Flagged Structural Anomalies</div></div>', unsafe_allow_html=True)
-    with k3: st.markdown('<div class="metric-tile"><div class="metric-val" style="color:#34d399">3.00%</div><div class="metric-lbl">Baseline Anomaly Frequency</div></div>', unsafe_allow_html=True)
+    with k1: st.markdown(f'<div class="metric-tile"><div class="metric-val" style="color:#3b82f6">{total_pts:,}</div><div class="metric-lbl">Total Monitored Units</div></div>', unsafe_allow_html=True)
+    with k2: st.markdown(f'<div class="metric-tile"><div class="metric-val" style="color:#fb923c">{flagged:,}</div><div class="metric-lbl">Flagged Structural Anomalies (&ge;2/3 votes)</div></div>', unsafe_allow_html=True)
+    with k3: st.markdown(f'<div class="metric-tile"><div class="metric-val" style="color:#34d399">{rate:.2f}%</div><div class="metric-lbl">Consensus Anomaly Frequency</div></div>', unsafe_allow_html=True)
