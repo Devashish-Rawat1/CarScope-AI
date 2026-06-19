@@ -9,36 +9,72 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = ROOT_DIR / "data" / "Car Sell Dataset.csv"
 DEFAULT_OUTPUT_DIR = ROOT_DIR / "data"
 
+OWNER_MAP = {"1st": 1, "2nd": 2, "3rd+": 3}
+ACCIDENTAL_MAP = {"No": 0, "Yes": 1}
+TRANSMISSION_MAP = {"Manual": 0, "Automatic": 1}
+
+
+def engineer_features(df):
+    """Single source of truth for feature construction.
+
+    This is imported by BOTH the batch training pipeline (run once, on the
+    full dataset) and `src/inference.py` (run on every live single-listing
+    request from the Streamlit app). Keeping one shared function means the
+    two code paths can never silently diverge in how they build features --
+    that kind of drift was the root cause of a real bug where the live
+    "Analyze a Listing" tool and the batch evaluation script could score the
+    exact same car differently.
+    """
+    df = df.copy()
+
+    current_year = datetime.now().year
+    df["Car_Age"] = current_year - df["Year"]
+    df["KM_Per_Year"] = df["Kilometers"] / df["Car_Age"].replace(0, 1)
+    df = df.drop(columns=["Year"])
+
+    df["Owner"] = df["Owner"].map(OWNER_MAP)
+    df["Accidental"] = df["Accidental"].map(ACCIDENTAL_MAP)
+    df["Transmission"] = df["Transmission"].map(TRANSMISSION_MAP)
+
+    # Defensive check: a silent mismatch in casing/whitespace (e.g. "1st owner"
+    # instead of "1st") would otherwise turn into a quiet NaN that XGBoost just
+    # absorbs as "missing" -- losing the feature's meaning with no warning.
+    mapped_cols = ["Owner", "Accidental", "Transmission"]
+    bad_rows = df[mapped_cols].isna().any(axis=1)
+    if bad_rows.any():
+        bad_preview = df.loc[bad_rows, mapped_cols].head()
+        raise ValueError(
+            f"{int(bad_rows.sum())} row(s) produced NaN after mapping "
+            f"Owner/Accidental/Transmission. Expected values are exactly "
+            f"{list(OWNER_MAP)} / {list(ACCIDENTAL_MAP)} / {list(TRANSMISSION_MAP)}. "
+            f"Check for casing or whitespace mismatches. Offending rows:\n{bad_preview}"
+        )
+
+    return df
+
+
 def run_feature_engineering(input_path=DEFAULT_INPUT, output_dir=DEFAULT_OUTPUT_DIR):
     """Performs deterministic feature engineering and safe dataset splits."""
     os.makedirs(output_dir, exist_ok=True)
     print("[-] Reading raw dataset...")
     df = pd.read_csv(input_path)
-    
-    # 1. Temporal Engineering
-    current_year = datetime.now().year
-    df["Car_Age"] = current_year - df["Year"]
-    df["KM_Per_Year"] = df["Kilometers"] / df["Car_Age"].replace(0, 1)
-    df = df.drop(columns=["Year"])
-    
-    # 2. Structural/Ordinal Feature Mapping
-    df["Owner"] = df["Owner"].map({"1st": 1, "2nd": 2, "3rd+": 3})
-    df["Accidental"] = df["Accidental"].map({"No": 0, "Yes": 1})
-    df["Transmission"] = df["Transmission"].map({"Manual": 0, "Automatic": 1})
-    
-    # 3. Features & Target Splitting
+
+    df = engineer_features(df)
+
+    # Features & Target Splitting
     X = df.drop(columns=["Price"])
     y = df["Price"]
-    
-    # 4. Train/Test Split
+
+    # Train/Test Split
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    # 5. Save out intermediate splits
+
+    # Save out intermediate splits
     X_train.to_csv(output_dir / "X_train_engineered.csv", index=False)
     X_test.to_csv(output_dir / "X_test_engineered.csv", index=False)
     y_train.to_csv(output_dir / "y_train.csv", index=False)
     y_test.to_csv(output_dir / "y_test.csv", index=False)
     print(f"[+] Feature Engineering complete. Splits preserved in '{output_dir}'.")
+
 
 if __name__ == "__main__":
     run_feature_engineering()
