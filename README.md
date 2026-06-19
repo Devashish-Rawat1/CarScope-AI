@@ -4,6 +4,8 @@ CarScope AI is an end-to-end machine learning pipeline and interactive web appli
 
 It utilizes a robust **Ensemble Anomaly Detection Framework** combining **Supervised Target Residuals (XGBoost)** with three complementary **Unsupervised Distance, Density, and Cluster-Membership Models** — Isolation Forest, Local Outlier Factor, and DBSCAN — to flag suspicious vehicle listings in real time.
 
+**Live Demo:** [carscope-ai.streamlit.app](https://carscope-ai-hmrqvpiry8ewehhz3kvevw.streamlit.app/)
+
 ---
 
 ## Features
